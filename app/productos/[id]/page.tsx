@@ -3,6 +3,13 @@ import { getProductById } from "@/lib/products"
 import { ProductDetailView } from "@/components/product-detail-view"
 import { Navbar } from "@/components/navbar"
 
+
+export const dynamicParams = true
+
+export async function generateStaticParams() {
+  return []
+}
+
 interface ProductPageProps {
   params: {
     id: string

@@ -33,45 +33,36 @@ export async function getProducts(
 
     const skip = (page - 1) * limit
 
-    let products: any[]
-    let total: number
+    // Get all products first, then sort in JavaScript
+    const allProducts = await collection.find(query).toArray()
+    const total = allProducts.length
 
+    // Sort in JavaScript for more reliable results
     if (sortBy) {
-      const pipeline: any[] = [
-        { $match: query },
-        {
-          $addFields: {
-            sortPrice: {
-              $cond: {
-                if: { $ne: ["$min_price", null] },
-                then: sortBy === "price_asc" ? "$min_price" : { $ifNull: ["$max_price", "$min_price"] },
-                else: { $ifNull: ["$price", 0] },
-              },
-            },
-          },
-        },
-        { $sort: { sortPrice: sortBy === "price_asc" ? 1 : -1 } },
-        { $skip: skip },
-        { $limit: limit },
-      ]
+      allProducts.sort((a, b) => {
+        let priceA = 0
+        let priceB = 0
 
-      const [productsResult, totalResult] = await Promise.all([
-        collection.aggregate(pipeline).toArray(),
-        collection.countDocuments(query),
-      ])
+        // Get price for product A
+        if (a.min_price !== undefined && a.min_price !== null) {
+          priceA = sortBy === "price_asc" ? a.min_price : (a.max_price || a.min_price)
+        } else if (a.price !== undefined && a.price !== null) {
+          priceA = a.price
+        }
 
-      products = productsResult
-      total = totalResult
-    } else {
-      // Sin ordenamiento, usar find normal
-      const [productsResult, totalResult] = await Promise.all([
-        collection.find(query).skip(skip).limit(limit).toArray(),
-        collection.countDocuments(query),
-      ])
+        // Get price for product B
+        if (b.min_price !== undefined && b.min_price !== null) {
+          priceB = sortBy === "price_asc" ? b.min_price : (b.max_price || b.min_price)
+        } else if (b.price !== undefined && b.price !== null) {
+          priceB = b.price
+        }
 
-      products = productsResult
-      total = totalResult
+        return sortBy === "price_asc" ? priceA - priceB : priceB - priceA
+      })
     }
+
+    // Apply pagination after sorting
+    const products = allProducts.slice(skip, skip + limit)
 
     return {
       products: products.map((product) => ({
